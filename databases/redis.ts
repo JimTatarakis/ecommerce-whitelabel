@@ -1,141 +1,192 @@
 /* Redis - Database */
 /* reference: https://github.com/redis/node-redis */
-import { createClient } from 'redis';
+import {createClient} from 'redis';
 
-class Redis {
-    client: object|null
-    url: string
-    constructor(url: string) {
+type RedisClient = ReturnType<typeof createClient>;
+
+export default class Redis {
+    private static instance: Redis | null = null;
+    private readonly client: RedisClient;
+    private readonly url: string;
+
+    private constructor(url: string) {
         this.url = url;
-        this.client = this.#connectClient();
+        this.client = createClient({ url: this.url });
+        this.client.on('error', (err: any) => {
+            console.log('Redis Client Error', err);
+        });
     }
 
-    async #connectClient(): Promise<object | null>
-    {
-        // Tip - redis[s]://[[username][:password]@][host][:port][/db-number]
-        return await createClient({url: this.url})
-            .on('error', (err) => {
-                console.log('Redis Client Error', err)
-                return null;
-            })
-            .connect();
+    static getInstance(url: string): Redis {
+        if (!Redis.instance) {
+            Redis.instance = new Redis(url);
+        }
+
+        return Redis.instance;
     }
 
-    #isConnected(): boolean
+    isConnected(): boolean
     {
         //todo:jtatarakis add logging here for when we aren't connected
-        if (this.client === null) {
+        if (this.client.isReady === false) {
             console.log('Database not connected!')
         }
 
-        return this.client !== null;
+        return this.client.isReady === true;
     }
 
     async setKeyValuePair(key: string, value: string): Promise<boolean>
     {
-        key = await this.sanitizeString(key);
-        value = await this.sanitizeString(value);
+        key = this.sanitizeString(key);
+        value = this.sanitizeString(value);
 
-        if (!this.#isConnected() || key.length === 0 || value.length === 0) {
+        if (!this.isConnected() || key.length === 0 || value.length === 0) {
             return false;
         }
 
-        const client = this.client;
+        try {
+            const client: { [index: string]: any } = this.client;
+            await client.set(key, value);
 
-        // @ts-ignore ts freaks out if I call client here because it thinks it could be null.
-        // However #isConnected() is checked.
-        await client.set(key, value);
-
-        return true;
+            return true;
+        } catch (error) {
+            console.error('\n ::: Error in getKeyValuePair::: \n', error);
+            return false;
+        }
     }
 
     async getKeyValuePair(key: string): Promise<string>
     {
-        key = await this.sanitizeString(key);
+        key = this.sanitizeString(key);
 
-        if (!this.#isConnected() || key.length === 0) {
+        if (!this.isConnected() || key.length === 0) {
             return '';
         }
 
-        const client = this.client;
+        try {
+            const client: { [index: string]: any } = this.client;
+            const result = await client.get(key);
 
-        // @ts-ignore ts freaks out if I call client here because it thinks it could be null.
-        // However #isConnected() is checked.
-        const result = await client.get(key, value);
-        console.log(result);
+            console.log(result);
 
-        return result;
+            return result;
+        } catch (error) {
+            console.error('\n ::: Error in getKeyValuePair::: \n', error);
+            return '';
+        }
     }
 
     async setHashObject(key: string, object: object): Promise<boolean>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        key = await this.sanitizeString(key);
+        key = this.sanitizeString(key);
         object = await this.sanitizeObject(object);
 
-        if (!this.#isConnected() || key.length === 0) {
+        if (!this.isConnected() || key.length === 0) {
             return false;
         }
 
-        // @ts-ignore
-        const fieldsAdded = await this.client.hSet(key, object)
+        try {
+            const client: { [index: string]: any } = this.client;
+            const fieldsAdded: number = await client.hSet(key, object);
 
-        console.log(`\n ::: setHashKeyObject - fieldsAdded ::: \n ${fieldsAdded}`);
-        // Number of fields were added: 4
+            console.log(`\n ::: setHashKeyObject - fieldsAdded ::: \n ${fieldsAdded}`);
 
-        return fieldsAdded > 0;
+            return fieldsAdded > 0;
+        } catch (error) {
+            console.error('\n ::: Error in getKeyValuePair::: \n', error);
+            return false;
+        }
     }
 
-    async getHashObject(key: string): Promise<boolean>
+    async getHashObject(key: string): Promise<object>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        key = await this.sanitizeString(key);
+        key = this.sanitizeString(key);
 
-        if (!this.#isConnected() || key.length === 0) {
-            return false;
+        if (!this.isConnected() || key.length === 0) {
+            return {};
         }
 
-        // @ts-ignore
-        const result = await this.client.hGetAll(key);
+        try {
+            const client: { [index: string]: any } = this.client;
+            const result: {[index: string]: any} = await client.hGetAll(key);
 
-        console.log(`\n ::: getHashKeyObject - fieldsAdded ::: \n`, result);
+            console.log(`\n ::: getHashKeyObject - result ::: \n`, result);
 
-        return result;
+            return result;
+        } catch (error) {
+            console.error('\n ::: Error in getKeyValuePair::: \n', error);
+            return {};
+        }
     }
 
-    async getHashObjectProperty(key: string, property: string): Promise<boolean>
+    async getHashObjectProperty(key: string, property: string): Promise<any>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        key = await this.sanitizeString(key);
-        property = await this.sanitizeString(property);
+        key = this.sanitizeString(key);
+        property = this.sanitizeString(property);
 
-        if (!this.#isConnected() || key.length === 0 || property.length === 0) {
+        if (!this.isConnected() || key.length === 0 || property.length === 0) {
             return false;
         }
 
-        // @ts-ignore
-        const result = await this.client.hGet(key, property);
+        try {
+            const client: { [index: string]: any } = this.client;
+            const result: {[index: string]: any} = await client.hGet(key, property);
 
-        console.log(`\n ::: getHashKeyObject - fieldsAdded ::: \n`, result);
+            console.log(`\n ::: getHashKeyObjectProject - result ::: \n`, result);
 
-        return result;
+            return result;
+        } catch (error) {
+            console.error('\n ::: Error in getKeyValuePair::: \n', error);
+            return null;
+        }
     }
 
-    async sanitizeString(string: string): Promise<string>
+    async getHashObjectProperties(key: string, properties: any[]): Promise<any>
     {
-        return string.replace(/[@!{}()|\-=>]/g, '');
+        /* reference: https://redis.io/docs/data-types/hashes/ */
+        const sanitizedProperties: any[] = [];
+        key = this.sanitizeString(key);
+        properties.forEach((propertyName: string) => {
+            const sanitizedProperty: string = this.sanitizeString(propertyName);
+            if (sanitizedProperty !== '') {
+                sanitizedProperties.push(sanitizedProperty);
+            }
+        });
+
+        if (!this.isConnected() || key.length === 0 || sanitizedProperties.length === 0) {
+            return null;
+        }
+
+        try {
+            const client: { [index: string]: any } = this.client;
+            const result: {[index: string]: any} = await client.hmGet(key, sanitizedProperties);
+
+            console.log(`\n ::: getHashKeyObjectProject - result ::: \n`, result);
+
+            return result;
+        } catch (error) {
+            console.error('\n ::: Error in getKeyValuePair::: \n', error);
+            return null;
+        }
+    }
+
+    sanitizeString(string: string): string
+    {
+        return string.replace(/[\\"']/g, '');
     }
 
     async sanitizeObject(object: {[index: string]: any}): Promise<object>
     {
-        const result :{[index :string] :any} = {};
+        const sanitizedResult :{[index :string] :any} = {};
         const keysFilteredOfFunctions :string[] = Object.keys(object)
             .filter((key: any): boolean => typeof object[key] !== 'function');
         keysFilteredOfFunctions.forEach((filteredKey: string) => {
-            result[filteredKey] = object[filteredKey];
+            sanitizedResult[filteredKey] = object[filteredKey];
         })
-        console.log(`\n ::: sanitizedObject - result ::: \n ${result}`)
 
-        return result;
+        return sanitizedResult;
     }
 }
