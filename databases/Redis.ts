@@ -17,7 +17,8 @@ export default class Redis {
         });
     }
 
-    static getInstance(url: string): Redis {
+    static getInstance(url: string): Redis
+    {
         if (!Redis.instance) {
             Redis.instance = new Redis(url);
         }
@@ -28,11 +29,11 @@ export default class Redis {
     isConnected(): boolean
     {
         //todo:jtatarakis add logging here for when we aren't connected
-        if (this.client.isReady === false) {
+        if (!this.client.isReady) {
             console.log('Database not connected!')
         }
 
-        return this.client.isReady === true;
+        return this.client.isReady;
     }
 
     async setKeyValuePair(key: string, value: string): Promise<boolean>
@@ -55,24 +56,20 @@ export default class Redis {
         }
     }
 
-    async getKeyValuePair(key: string): Promise<string>
+    async getKeyValuePair(key: string): Promise<string | null>
     {
+        /* reference: https://redis.io/docs/get-started/data-store/ */
         key = this.sanitizeString(key);
 
-        if (!this.isConnected() || key.length === 0) {
-            return '';
+        if (!this.isConnected() || key === '') {
+            return null;
         }
 
         try {
-            const client: { [index: string]: any } = this.client;
-            const result = await client.get(key);
-
-            console.log(result);
-
-            return result;
+            return await this.client.get(key);
         } catch (error) {
             console.error('\n ::: Error in getKeyValuePair::: \n', error);
-            return '';
+            return null;
         }
     }
 
@@ -80,9 +77,9 @@ export default class Redis {
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
         key = this.sanitizeString(key);
-        object = await this.sanitizeObject(object);
+        object = this.sanitizeObject(object);
 
-        if (!this.isConnected() || key.length === 0) {
+        if (!this.isConnected() || key.length === 0 || Object.keys(object).length === 0) {
             return false;
         }
 
@@ -90,34 +87,27 @@ export default class Redis {
             const client: { [index: string]: any } = this.client;
             const fieldsAdded: number = await client.hSet(key, object);
 
-            console.log(`\n ::: setHashKeyObject - fieldsAdded ::: \n ${fieldsAdded}`);
-
             return fieldsAdded > 0;
         } catch (error) {
-            console.error('\n ::: Error in getKeyValuePair::: \n', error);
+            console.error('\n ::: Error in setHashObject::: \n', error);
             return false;
         }
     }
 
-    async getHashObject(key: string): Promise<object>
+    async getHashObject(key: string): Promise<object | null>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
         key = this.sanitizeString(key);
 
         if (!this.isConnected() || key.length === 0) {
-            return {};
+            return null;
         }
 
         try {
-            const client: { [index: string]: any } = this.client;
-            const result: {[index: string]: any} = await client.hGetAll(key);
-
-            console.log(`\n ::: getHashKeyObject - result ::: \n`, result);
-
-            return result;
+            return await this.client.hGetAll(key);
         } catch (error) {
-            console.error('\n ::: Error in getKeyValuePair::: \n', error);
-            return {};
+            console.error('\n ::: Error in getHashObject::: \n', error);
+            return null;
         }
     }
 
@@ -128,27 +118,25 @@ export default class Redis {
         property = this.sanitizeString(property);
 
         if (!this.isConnected() || key.length === 0 || property.length === 0) {
-            return false;
+            return null;
         }
 
         try {
-            const client: { [index: string]: any } = this.client;
-            const result: {[index: string]: any} = await client.hGet(key, property);
-
-            console.log(`\n ::: getHashKeyObjectProject - result ::: \n`, result);
-
-            return result;
+            return await this.client.hGet(key, property);
         } catch (error) {
-            console.error('\n ::: Error in getKeyValuePair::: \n', error);
+            console.error('\n ::: Error in getHashObjectProperty::: \n', error);
             return null;
         }
     }
 
+    // on error or item not found, return null
+    // return properties otherwise
     async getHashObjectProperties(key: string, properties: any[]): Promise<any>
     {
         /* reference: https://redis.io/docs/data-types/hashes/ */
         const sanitizedProperties: any[] = [];
         key = this.sanitizeString(key);
+
         properties.forEach((propertyName: string) => {
             const sanitizedProperty: string = this.sanitizeString(propertyName);
             if (sanitizedProperty !== '') {
@@ -156,19 +144,14 @@ export default class Redis {
             }
         });
 
-        if (!this.isConnected() || key.length === 0 || sanitizedProperties.length === 0) {
+        if (!this.isConnected() || key === '' || sanitizedProperties.length === 0) {
             return null;
         }
 
         try {
-            const client: { [index: string]: any } = this.client;
-            const result: {[index: string]: any} = await client.hmGet(key, sanitizedProperties);
-
-            console.log(`\n ::: getHashKeyObjectProject - result ::: \n`, result);
-
-            return result;
+            return await this.client.hmGet(key, sanitizedProperties);
         } catch (error) {
-            console.error('\n ::: Error in getKeyValuePair::: \n', error);
+            console.error('\n ::: Error in getHashObjectProperties ::: \n', error);
             return null;
         }
     }
@@ -178,7 +161,7 @@ export default class Redis {
         return string.replace(/[\\"']/g, '');
     }
 
-    async sanitizeObject(object: {[index: string]: any}): Promise<object>
+    sanitizeObject(object: {[index: string]: any}): object
     {
         const sanitizedResult :{[index :string] :any} = {};
         const keysFilteredOfFunctions :string[] = Object.keys(object)
