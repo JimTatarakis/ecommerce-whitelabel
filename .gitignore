@@ -1,9 +1,12 @@
 /node_modules/
 .env
+/tests/Scratch.test.ts
 # MacOS
 .DS_Store
 .AppleDouble
 .LSOverride
+.idea/
+personalNotes.md
 
 # Created by https://www.gitignore.io/api/phpstorm
 ### PhpStorm ###
