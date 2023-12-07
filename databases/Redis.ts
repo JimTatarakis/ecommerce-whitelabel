@@ -197,6 +197,20 @@ export default class Redis {
         }
     }
 
+    async deleteKey(hash: string, key: string): Promise<boolean> {
+        if (!this.isConnected() || hash === '' || key === '') {
+            return false;
+        }
+
+        try {
+            const deletedKey: number = await this.client.del(`${hash}:${key}`);
+            return deletedKey > 0; // Check if the key was deleted
+        } catch (error) {
+            console.error('\n ::: Error in deleteKey ::: \n', error);
+            return false;
+        }
+    }
+
     sanitizeString(string: string): string
     {
         return string.replace(/[\\"']/g, '');
