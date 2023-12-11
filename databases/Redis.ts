@@ -69,8 +69,6 @@ export default class Redis {
 
     async setKeyValuePair(hash: string, key: string, value: string): Promise<boolean>
     {
-        hash  = await sanitizeStringForRedisHashing(hash);
-        key   = await sanitizeStringForRedisHashing(key);
         value = await sanitizeStringForRedisHashing(value);
 
         if (!this.isConnected() || key.length === 0 || value.length === 0) {
@@ -108,10 +106,6 @@ export default class Redis {
     async setHashObject(hash : string, key : string, object : object): Promise<boolean>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        hash = await sanitizeStringForRedisHashing(hash)
-        key = await sanitizeStringForRedisHashing(key);
-        console.log('before sanitization')
-        console.log(object)
         object = await sanitizeObjectForRedisHashing(object);
 
         if (!this.isConnected() || key.length === 0 || Object.keys(object).length === 0) {
@@ -119,16 +113,11 @@ export default class Redis {
         }
 
         try {
-            console.log('setHashObject ::: made it to the try block - start')
             const client: { [index: string]: any } = this.client;
-            console.log('after sanitization')
-            console.log(object)
-            // const fieldsAdded: number = await client.hSet(key, object);
             const fieldsAdded: number = await client.hSet(`${hash}:${key}`, object)
-            console.log('fields added ::: \n', fieldsAdded)
+
             return fieldsAdded > 0;
         } catch (error) {
-            console.error('\n ::: Error in setHashObject::: \n', error);
             return false;
         }
     }
@@ -136,9 +125,6 @@ export default class Redis {
     async getHashObject(hash : string, key: string): Promise<object | null>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        hash = await sanitizeStringForRedisHashing(hash);
-        key = await sanitizeStringForRedisHashing(key);
-
         if (!this.isConnected() || key.length === 0) {
             return null;
         }
@@ -154,8 +140,6 @@ export default class Redis {
     async getHashObjectProperty(hash : string, key : string, property : string) : Promise<any>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        hash = await sanitizeStringForRedisHashing(hash);
-        key = await sanitizeStringForRedisHashing(key);
         property = await sanitizeStringForRedisHashing(property);
 
         if (!this.isConnected() || key.length === 0 || property.length === 0) {
@@ -176,8 +160,6 @@ export default class Redis {
     {
         /* reference: https://redis.io/docs/data-types/hashes/ */
         const sanitizedProperties: any[] = [];
-        hash = await sanitizeStringForRedisHashing(hash);
-        key = await sanitizeStringForRedisHashing(key);
 
         await Promise.all(
             properties.map(async (propertyName: any) => {
@@ -201,9 +183,6 @@ export default class Redis {
     }
 
     async deleteKey(hash: string, key: string): Promise<boolean> {
-        hash = await sanitizeStringForRedisHashing(hash);
-        key = await sanitizeStringForRedisHashing(key);
-
         if (!this.isConnected() || hash === '' || key === '') {
             return false;
         }
