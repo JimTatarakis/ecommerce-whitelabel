@@ -1,6 +1,8 @@
 /* Redis - Database */
 /* reference: https://github.com/redis/node-redis */
-import {createClient} from 'redis';
+import { createClient } from 'redis';
+import { sanitizeObjectForRedisHashing, sanitizeStringForRedisHashing } from '../helpers/DatabaseHelper.ts';
+import {serialize} from "../helpers/SerializationHelper.ts";
 
 type RedisClient = ReturnType<typeof createClient>;
 
@@ -58,7 +60,6 @@ export default class Redis {
 
     isConnected(): boolean
     {
-        //todo:jtatarakis add logging here for when we aren't connected
         if (!this.client.isReady) {
             console.log('Database not connected!')
         }
@@ -68,9 +69,9 @@ export default class Redis {
 
     async setKeyValuePair(hash: string, key: string, value: string): Promise<boolean>
     {
-        hash  = this.sanitizeString(hash);
-        key   = this.sanitizeString(key);
-        value = this.sanitizeString(value);
+        hash  = await sanitizeStringForRedisHashing(hash);
+        key   = await sanitizeStringForRedisHashing(key);
+        value = await sanitizeStringForRedisHashing(value);
 
         if (!this.isConnected() || key.length === 0 || value.length === 0) {
             return false;
@@ -90,7 +91,7 @@ export default class Redis {
     async getKeyValuePair(hash:string, key: string): Promise<string | null>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        key = this.sanitizeString(key);
+        key = await sanitizeStringForRedisHashing(key);
 
         if (!this.isConnected() || key === '') {
             return null;
@@ -107,11 +108,11 @@ export default class Redis {
     async setHashObject(hash : string, key : string, object : object): Promise<boolean>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        hash = this.sanitizeString(hash)
-        key = this.sanitizeString(key);
+        hash = await sanitizeStringForRedisHashing(hash)
+        key = await sanitizeStringForRedisHashing(key);
         console.log('before sanitization')
         console.log(object)
-        object = this.sanitizeObject(object);
+        object = await sanitizeObjectForRedisHashing(object);
 
         if (!this.isConnected() || key.length === 0 || Object.keys(object).length === 0) {
             return false;
@@ -135,8 +136,8 @@ export default class Redis {
     async getHashObject(hash : string, key: string): Promise<object | null>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        hash = this.sanitizeString(hash);
-        key = this.sanitizeString(key);
+        hash = await sanitizeStringForRedisHashing(hash);
+        key = await sanitizeStringForRedisHashing(key);
 
         if (!this.isConnected() || key.length === 0) {
             return null;
@@ -153,9 +154,9 @@ export default class Redis {
     async getHashObjectProperty(hash : string, key : string, property : string) : Promise<any>
     {
         /* reference: https://redis.io/docs/get-started/data-store/ */
-        hash = this.sanitizeString(hash);
-        key = this.sanitizeString(key);
-        property = this.sanitizeString(property);
+        hash = await sanitizeStringForRedisHashing(hash);
+        key = await sanitizeStringForRedisHashing(key);
+        property = await sanitizeStringForRedisHashing(property);
 
         if (!this.isConnected() || key.length === 0 || property.length === 0) {
             return null;
@@ -175,15 +176,17 @@ export default class Redis {
     {
         /* reference: https://redis.io/docs/data-types/hashes/ */
         const sanitizedProperties: any[] = [];
-        hash = this.sanitizeString(hash);
-        key = this.sanitizeString(key);
+        hash = await sanitizeStringForRedisHashing(hash);
+        key = await sanitizeStringForRedisHashing(key);
 
-        properties.forEach((propertyName: string) => {
-            const sanitizedProperty: string = this.sanitizeString(propertyName);
-            if (sanitizedProperty !== '') {
-                sanitizedProperties.push(sanitizedProperty);
-            }
-        });
+        await Promise.all(
+            properties.map(async (propertyName: any) => {
+                const sanitizedProperty: string = await sanitizeStringForRedisHashing(propertyName);
+                if (sanitizedProperty !== '') {
+                    sanitizedProperties.push(sanitizedProperty);
+                }
+            })
+        );
 
         if (!this.isConnected() || key === '' || sanitizedProperties.length === 0) {
             return null;
@@ -198,6 +201,9 @@ export default class Redis {
     }
 
     async deleteKey(hash: string, key: string): Promise<boolean> {
+        hash = await sanitizeStringForRedisHashing(hash);
+        key = await sanitizeStringForRedisHashing(key);
+
         if (!this.isConnected() || hash === '' || key === '') {
             return false;
         }
@@ -210,24 +216,4 @@ export default class Redis {
             return false;
         }
     }
-
-    sanitizeString(string: string): string
-    {
-        return string.replace(/[\\"']/g, '');
-    }
-
-    sanitizeObject(object: {[index: string]: any}): object
-    {
-        //todo:jtatarakis *** add object handling **,
-        // we need to json stringify value in order to be able to use it in redis
-        const sanitizedResult :{[index :string] :any} = {};
-        const keysFilteredOfFunctions :string[] = Object.keys(object)
-            .filter((key: any): boolean => typeof object[key] !== 'function');
-        keysFilteredOfFunctions.forEach((filteredKey: string) => {
-            sanitizedResult[filteredKey] = object[filteredKey];
-        })
-
-        return sanitizedResult;
-    }
-    //todo:jtatarakis add post retrieval object handler, destringify object properties
 }
